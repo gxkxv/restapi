@@ -1,0 +1,14 @@
+env: "local"
+storage_path: "./storage"
+http_server:
+  port: 8082
+  timeout: 4s
+  iddle_timeout: 60s
+
+database:
+  host: "localhost"
+  port: 5432
+  user: "postgres"
+  password: "m6789629"
+  database: "pet"
+  ssl_mode: "disable"
