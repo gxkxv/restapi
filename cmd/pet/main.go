@@ -1,10 +1,14 @@
 package main
 
 import (
+	"github.com/go-chi/chi/v5"
+	"github.com/go-chi/chi/v5/middleware"
+	"log/slog"
+	"net/http"
+	"os"
+
 	"github.com/gxkxv/restapi-pet/internal/lib/logger/sl"
 	"github.com/gxkxv/restapi-pet/internal/storage/postgresql"
-	"log/slog"
-	"os"
 
 	"github.com/gxkxv/restapi-pet/internal/config"
 )
@@ -30,7 +34,22 @@ func main() {
 	}
 
 	_ = storage
-	storage.GetInfoFromURL("timur")
+
+	router := chi.NewRouter()
+	router.Use(middleware.Logger)
+
+	router.Route("/", func(r chi.Router) {
+		r.Get("/users", postgresql.GetUsers(storage))
+		r.Get("/info", postgresql.GetUser(storage))
+		r.Get("/create", postgresql.CreateUser(storage))
+		r.Post("/create", postgresql.CreateUser(storage))
+		r.Patch("/update/{name}", postgresql.UpdateUser(storage))
+
+	})
+	err = http.ListenAndServe(":8080", router)
+	if err != nil {
+		log.Error("error starting server", sl.Err(err))
+	}
 }
 
 func setupLogger(env string) *slog.Logger {
