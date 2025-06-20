@@ -41,10 +41,10 @@ func main() {
 	router.Route("/", func(r chi.Router) {
 		r.Get("/users", postgresql.GetUsers(storage))
 		r.Get("/info", postgresql.GetUser(storage))
-		r.Get("/create", postgresql.CreateUser(storage))
 		r.Post("/create", postgresql.CreateUser(storage))
 		r.Patch("/update/{name}", postgresql.UpdateUser(storage))
-
+		r.Post("/{firstFriend}/add/{secondFriend}", postgresql.AddFriends(storage))
+		r.Get("/friends/{id}", postgresql.GetFriends(storage))
 	})
 	err = http.ListenAndServe(":8080", router)
 	if err != nil {

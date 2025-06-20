@@ -9,9 +9,11 @@ import (
 	_ "github.com/lib/pq"
 	"log/slog"
 	"net/http"
+	"strconv"
 )
 
 type User struct {
+	id     int
 	Name   string
 	Age    int
 	Gender string
@@ -239,5 +241,71 @@ func UpdateUser(s *Storage) http.HandlerFunc {
 			return
 		}
 		w.WriteHeader(http.StatusNoContent)
+	}
+}
+
+func AddFriends(s *Storage) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		firstFriend := chi.URLParam(r, "firstFriend")
+		secondFriend := chi.URLParam(r, "secondFriend")
+		if firstFriend == "" {
+			http.Error(w, "Missing 'firstFriend' query parameter", http.StatusBadRequest)
+		} else if secondFriend == "" {
+			http.Error(w, "Missing 'secondFriend' query parameter", http.StatusBadRequest)
+		} else if firstFriend == "" && secondFriend == "" {
+			http.Error(w, "Missing 'firstFriend' and 'secondFriend' query parameters", http.StatusBadRequest)
+		}
+		_, err := strconv.Atoi(firstFriend)
+		if err != nil {
+			slog.Error(err.Error())
+		}
+		_, err = strconv.Atoi(secondFriend)
+		if err != nil {
+			slog.Error(err.Error())
+		}
+		stmt, err := s.db.Prepare(fmt.Sprintf("INSERT INTO friends(firstFriend,secondFriend) VALUES ('%d','%d'),('%d','%d')", firstFriend, secondFriend, secondFriend, firstFriend))
+		if err != nil {
+			slog.Error(err.Error())
+		}
+		defer stmt.Close()
+		_, err = stmt.Exec()
+		if err != nil {
+			slog.Error(err.Error())
+		}
+	}
+}
+
+func GetFriends(s *Storage) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		id := chi.URLParam(r, "id")
+		_, err := strconv.Atoi(id)
+		if err != nil {
+			slog.Error(err.Error())
+		}
+		stmt, err := s.db.Prepare("SELECT u.name, f.friend_id FROM friendships INNER JOIN u users ON u.id = f.user_id WHERE u.id = $1")
+		if err != nil {
+			slog.Error(err.Error())
+		}
+		defer stmt.Close()
+		_, err = stmt.Exec(id)
+		if err != nil {
+			slog.Error(err.Error())
+		}
+		rows, err := stmt.Query(id)
+		if err != nil {
+			slog.Error(err.Error())
+		}
+		w.Header().Set("Content-Type", "application/json")
+		for rows.Next() {
+			var user User
+			if err := rows.Scan(&user.id, &user.Name); err != nil {
+				slog.Error(err.Error())
+			}
+			if err = json.NewEncoder(w).Encode(user); err != nil {
+				slog.Error(err.Error())
+			}
+		}
+
+		return
 	}
 }
