@@ -1,47 +1,35 @@
 package config
 
 import (
-	"log"
-	"os"
-	"time"
-
 	"github.com/ilyakaznacheev/cleanenv"
+	"log"
+	"time"
 )
 
 type Config struct {
-	Env         string `yaml:"env"`
-	StoragePath string `yaml:"storage_path" env_required:"true"`
+	Env         string `env:"APP_ENV" env-required:"true"`
+	StoragePath string `env:"STORAGE_PATH" env-required:"true"`
 	HttpServer  struct {
-		Address     string        `yaml:"address" env_default:"localhost" env_required:"true"`
-		Port        string        `yaml:"port" env_default:"8082" env_required:"true"`
-		Timeout     time.Duration `yaml:"timeout" env_default:"4s" env_required:"true"`
-		IdleTimeout time.Duration `yaml:"iddle_timeout" env_default:"60s" env_required:"true"`
-	} `yaml:"http_server"`
+		Address     string        `env:"HTTP_ADDRESS"     env-default:"localhost" env-required:"true"`
+		Port        string        `env:"HTTP_PORT"        env-default:"8082"     env-required:"true"`
+		Timeout     time.Duration `env:"HTTP_TIMEOUT"     env-default:"4s"       env-required:"true"`
+		IdleTimeout time.Duration `env:"HTTP_IDLE_TIMEOUT" env-default:"60s"     env-required:"true"`
+	}
 	Database struct {
-		Host     string `yaml:"host" env_required:"true"`
-		Port     string `yaml:"port" env_required:"true"`
-		User     string `yaml:"user" env_required:"true"`
-		Password string `yaml:"password" env_required:"true"`
-		Name     string `yaml:"database" env_required:"true"`
-		SSLMode  string `yaml:"ssl_mode" env_required:"true"`
+		Host     string `env:"DB_HOST"     env-required:"true"`
+		Port     string `env:"DB_PORT"     env-required:"true"`
+		User     string `env:"DB_USER"     env-required:"true"`
+		Password string `env:"DB_PASSWORD" env-required:"true"`
+		Name     string `env:"DB_NAME"     env-required:"true"`
+		SSLMode  string `env:"DB_SSLMODE" env-required:"true"`
 	}
 }
 
 func MustLoad() *Config {
-	configPath := "config/local.yaml"
-	if configPath == "" {
-		log.Fatal("CONFIG_PATH is not set")
-	}
-
-	// check if file exists
-	if _, err := os.Stat(configPath); os.IsNotExist(err) {
-		log.Fatalf("config file does not exist: %s", configPath)
-	}
-
 	var cfg Config
 
-	if err := cleanenv.ReadConfig(configPath, &cfg); err != nil {
-		log.Fatalf("error reading config file: %s", err)
+	if err := cleanenv.ReadEnv(&cfg); err != nil {
+		log.Fatalf("cannot read environment: %s", err)
 	}
 
 	return &cfg
