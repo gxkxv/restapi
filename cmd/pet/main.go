@@ -40,9 +40,9 @@ func main() {
 
 	router.Route("/", func(r chi.Router) {
 		r.Get("/users", postgresql.GetUsers(storage))
-		r.Get("/info", postgresql.GetUser(storage))
-		r.Post("/create", postgresql.CreateUser(storage))
-		r.Patch("/update/{name}", postgresql.UpdateUser(storage))
+		r.Get("/info/{id}", postgresql.GetUser(storage))
+		r.Post("/create/{name}", postgresql.CreateUser(storage))
+		r.Patch("/{id}/update/{field}/{new_value}", postgresql.UpdateUser(storage))
 		r.Post("/{firstFriend}/add/{secondFriend}", postgresql.AddFriends(storage))
 		r.Get("/friends/{id}", postgresql.GetFriends(storage))
 	})

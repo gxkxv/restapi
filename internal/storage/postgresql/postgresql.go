@@ -141,12 +141,12 @@ func GetUsers(s *Storage) http.HandlerFunc {
 
 func GetUser(s *Storage) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		name := chi.URLParam(r, "name")
+		name := chi.URLParam(r, "id")
 		if name == "" {
-			http.Error(w, "Missing 'name' query parameter", http.StatusBadRequest)
+			http.Error(w, "Missing 'id' query parameter", http.StatusBadRequest)
 			return
 		}
-		stmt, err := s.db.Prepare("SELECT name, age, gender, nation FROM users WHERE name = $1")
+		stmt, err := s.db.Prepare("SELECT name, age, gender, nation FROM users WHERE id = $1")
 		if err != nil {
 			slog.Error(fmt.Sprintf("prepare user: %w", err))
 			http.Error(w, "Internal server error", http.StatusInternalServerError)
@@ -189,57 +189,52 @@ func CreateUser(s *Storage) http.HandlerFunc {
 
 func UpdateUser(s *Storage) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		name := chi.URLParam(r, "name")
-		if name == "" {
-			http.Error(w, "Missing 'name' query parameter", http.StatusBadRequest)
-		}
-		var patch struct {
-			Name   *string `json:"name"`
-			Age    *int    `json:"age"`
-			Gender *string `json:"gender"`
-			Nation *string `json:"nation"`
-		}
-		if err := json.NewDecoder(r.Body).Decode(&patch); err != nil {
-			slog.Error(err.Error())
-			return
-		}
-		query := "UPDATE users SET "
-		args := []interface{}{}
-		i := 1
 
-		if patch.Name != nil {
-			query += fmt.Sprintf("name = %d ", *patch.Name)
-			args = append(args, *patch.Name)
-			i++
-		}
-		if patch.Age != nil {
-			query += fmt.Sprintf("age = %d ", *patch.Age)
-			args = append(args, *patch.Age)
-			i++
-		}
-		if patch.Gender != nil {
-			query += fmt.Sprintf("gender = '%s' ", *patch.Gender)
-			args = append(args, *patch.Gender)
-			i++
-		}
-		if patch.Nation != nil {
-			query += fmt.Sprintf("nation = '%s' ", *patch.Nation)
-			args = append(args, *patch.Nation)
-			i++
-		}
-		if len(args) == 0 {
-			http.Error(w, "Missing  query parameters", http.StatusBadRequest)
+		idStr := chi.URLParam(r, "id")
+		field := chi.URLParam(r, "field")
+		newValue := chi.URLParam(r, "new_value")
+
+		if idStr == "" || field == "" || newValue == "" {
+			http.Error(w, "Missing parameters", http.StatusBadRequest)
 			return
 		}
-		query = query[:len(query)-1] + fmt.Sprintf(" WHERE name = $%d", i)
-		args = append(args, name)
-		stmt, err := s.db.Exec(query, args...)
-		_ = stmt
+		id, err := strconv.Atoi(idStr)
 		if err != nil {
-			slog.Error(err.Error())
-			http.Error(w, "Internal server error", http.StatusInternalServerError)
+			http.Error(w, "Invalid user ID", http.StatusBadRequest)
 			return
 		}
+		validFields := map[string]string{
+			"name":   "string",
+			"age":    "int",
+			"gender": "string",
+			"nation": "string",
+		}
+		fieldType, ok := validFields[field]
+		if !ok {
+			http.Error(w, "Invalid field name", http.StatusBadRequest)
+			return
+		}
+		var query string
+
+		if fieldType == "int" {
+			valueInt, err := strconv.Atoi(newValue)
+			if err != nil {
+				http.Error(w, "Invalid integer value", http.StatusBadRequest)
+				return
+			}
+			query = fmt.Sprintf("UPDATE users SET %s = $1 WHERE id = $2", field)
+			_, err = s.db.Exec(query, valueInt, id)
+		} else {
+			query = fmt.Sprintf("UPDATE users SET %s = $1 WHERE id = $2", field)
+			_, err = s.db.Exec(query, newValue, id)
+		}
+
+		if err != nil {
+			slog.Error("Update error:", err)
+			http.Error(w, "Database update error", http.StatusInternalServerError)
+			return
+		}
+
 		w.WriteHeader(http.StatusNoContent)
 	}
 }
@@ -255,15 +250,15 @@ func AddFriends(s *Storage) http.HandlerFunc {
 		} else if firstFriend == "" && secondFriend == "" {
 			http.Error(w, "Missing 'firstFriend' and 'secondFriend' query parameters", http.StatusBadRequest)
 		}
-		_, err := strconv.Atoi(firstFriend)
+		f, err := strconv.Atoi(firstFriend)
 		if err != nil {
 			slog.Error(err.Error())
 		}
-		_, err = strconv.Atoi(secondFriend)
+		fs, err := strconv.Atoi(secondFriend)
 		if err != nil {
 			slog.Error(err.Error())
 		}
-		stmt, err := s.db.Prepare(fmt.Sprintf("INSERT INTO friends(firstFriend,secondFriend) VALUES ('%d','%d'),('%d','%d')", firstFriend, secondFriend, secondFriend, firstFriend))
+		stmt, err := s.db.Prepare(fmt.Sprintf("INSERT INTO friendships(user_id,friend_id) VALUES (%d,%d),(%d,%d)", f, fs, fs, f))
 		if err != nil {
 			slog.Error(err.Error())
 		}
@@ -278,20 +273,20 @@ func AddFriends(s *Storage) http.HandlerFunc {
 func GetFriends(s *Storage) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		id := chi.URLParam(r, "id")
-		_, err := strconv.Atoi(id)
+		intId, err := strconv.Atoi(id)
 		if err != nil {
 			slog.Error(err.Error())
 		}
-		stmt, err := s.db.Prepare("SELECT u.name, f.friend_id FROM friendships INNER JOIN u users ON u.id = f.user_id WHERE u.id = $1")
+		stmt, err := s.db.Prepare("SELECT u.name, f.friend_id FROM friendships f INNER JOIN users u ON u.id = f.user_id WHERE u.id = $1")
 		if err != nil {
 			slog.Error(err.Error())
 		}
 		defer stmt.Close()
-		_, err = stmt.Exec(id)
+		_, err = stmt.Exec(intId)
 		if err != nil {
 			slog.Error(err.Error())
 		}
-		rows, err := stmt.Query(id)
+		rows, err := stmt.Query(intId)
 		if err != nil {
 			slog.Error(err.Error())
 		}
